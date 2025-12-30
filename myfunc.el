@@ -120,6 +120,205 @@ Handles formats like:
               (replace-match (concat "{" new-key))
               (message "BibTeX key updated: %s → %s" old-key new-key)))
         (error "No BibTeX entry found at point")))))
-  
+
+
+;; カスタム変数の定義
+(defgroup myfunc nil
+  "Custom functions and utilities."
+  :group 'convenience
+  :prefix "myfunc-")
+
+(defcustom myfunc-default-bib-file nil
+  "Default BibTeX file for inserting entries.
+If nil, prompts for a file each time."
+  :type '(choice (const :tag "Always prompt" nil)
+                 (file :tag "Default .bib file"))
+  :group 'myfunc)
+
+
+(defcustom myfunc-default-bib-file nil
+  "Default BibTeX file for inserting entries.
+If nil, prompts for a file each time."
+  :type '(choice (const :tag "Always prompt" nil)
+                 (file :tag "Default .bib file"))
+  :group 'myfunc)
+
+;; (defun myfunc-add-pdf-to-bib (pdf-file bib-file)
+;;   "Add BibTeX entry from PDF-FILE to BIB-FILE with custom key.
+;; PDF-FILE is determined by context (dired, pdf-tools, or prompt).
+;; BIB-FILE defaults to `myfunc-default-bib-file' or prompts if nil."
+;;   (interactive
+;;    (list (myfunc--get-pdf-file)
+;;          (or myfunc-default-bib-file
+;; 	     (car org-cite-global-bibliography)
+;;              (read-file-name "BibTeX file: " nil nil t nil
+;;                              (lambda (name) (string-match-p "\\.bib\\'" name))))))
+;;   (let ((pdf-path (expand-file-name pdf-file))
+;;         (bib-path (expand-file-name bib-file)))
+;;     ;; 一時バッファでBibTeX生成を試みる
+;;     (with-temp-buffer
+;;       (let ((output (string-trim
+;;                      (shell-command-to-string
+;;                       (format "pdf2bib %s | tail -n +2" 
+;;                               (shell-quote-argument pdf-path))))))
+;;         (if (or (string-empty-p output)
+;;                 (string-match-p "error\\|warning\\|failed" (downcase output)))
+;;             (progn
+;;               (message "No bib-info found for: %s" (file-name-nondirectory pdf-path))
+;;               nil) ; 解析失敗で終了
+;;           ;; 解析成功: BibTeXエントリを挿入
+;;           (insert output)
+;;           (bibtex-mode)
+;;           (bibtex-clean-entry)
+          
+;;           ;; キーを再生成
+;;           (goto-char (point-min))
+;;           (bibtex-beginning-of-entry)
+;;           (let* ((old-key (bibtex-key-in-head))
+;;                  (new-key (myfunc-generate-bibtex-key)))
+;;             (when old-key
+;;               (search-forward (concat "{" old-key))
+;;               (replace-match (concat "{" new-key)))
+            
+;;             ;; bibファイルの末尾に追加
+;;             (let ((entry-text (buffer-string)))
+;;               (find-file bib-path)
+;;               (goto-char (point-max))
+;;               ;; 末尾に改行がなければ追加
+;;               (unless (bolp) (insert "\n"))
+;;               (insert "\n" entry-text "\n")
+;;               (bibtex-mode)
+;;               (save-buffer)
+;;               (message "Added entry with key '%s' to %s" 
+;;                        new-key 
+;;                        (file-name-nondirectory bib-path))
+;;               ;; bibファイルを表示
+;;               (switch-to-buffer (current-buffer))
+;;               (goto-char (point-max))
+;;               (bibtex-beginning-of-entry))))))))
+
+(defun myfunc-add-pdf-to-bib (pdf-file bib-file)
+  "Add BibTeX entry from PDF-FILE to BIB-FILE with custom key.
+PDF-FILE is determined by context (dired, pdf-tools, or prompt).
+BIB-FILE defaults to `myfunc-default-bib-file' or prompts if nil.
+Checks for duplicate DOI before adding."
+  (interactive
+   (list (myfunc--get-pdf-file)
+         (or myfunc-default-bib-file
+             (car org-cite-global-bibliography)
+             (read-file-name "BibTeX file: " nil nil t nil
+                             (lambda (name) (string-match-p "\\.bib\\'" name))))))
+  (let ((pdf-path (expand-file-name pdf-file))
+        (bib-path (expand-file-name bib-file)))
+    ;; 一時バッファでBibTeX生成を試みる
+    (with-temp-buffer
+      (let ((output (string-trim
+                     (shell-command-to-string
+                      (format "pdf2bib %s | tail -n +2" 
+                              (shell-quote-argument pdf-path))))))
+        (if (or (string-empty-p output)
+                (string-match-p "error\\|warning\\|failed" (downcase output)))
+            (progn
+              (message "No bib-info found for: %s" (file-name-nondirectory pdf-path))
+              nil) ; 解析失敗で終了
+          ;; 解析成功: BibTeXエントリを挿入
+          (insert output)
+          (bibtex-mode)
+          (bibtex-clean-entry)
+          
+          ;; DOIを抽出
+          (goto-char (point-min))
+          (bibtex-beginning-of-entry)
+          (let* ((entry (bibtex-parse-entry t))
+                 (doi (bibtex-text-in-field "doi" entry))
+                 (existing-entry (when doi (myfunc--find-entry-by-doi doi bib-path))))
+            
+            ;; 重複チェック
+            (if existing-entry
+                (progn
+                  (find-file bib-path)
+                  (goto-char existing-entry)
+                  (bibtex-beginning-of-entry)
+                  (message "Entry with DOI '%s' already exists in %s" 
+                           doi 
+                           (file-name-nondirectory bib-path)))
+              
+              ;; 重複なし: キーを再生成して追加
+              (goto-char (point-min))
+              (bibtex-beginning-of-entry)
+              (let* ((old-key (bibtex-key-in-head))
+                     (new-key (myfunc-generate-bibtex-key)))
+                (when old-key
+                  (search-forward (concat "{" old-key))
+                  (replace-match (concat "{" new-key)))
+                
+                ;; bibファイルの末尾に追加
+                (let ((entry-text (buffer-string)))
+                  (find-file bib-path)
+                  (goto-char (point-max))
+                  ;; 末尾に改行がなければ追加
+                  (unless (bolp) (insert "\n"))
+                  (insert "\n" entry-text "\n")
+                  (bibtex-mode)
+                  (save-buffer)
+                  (message "Added entry with key '%s' to %s" 
+                           new-key 
+                           (file-name-nondirectory bib-path))
+                  ;; bibファイルを表示
+                  (switch-to-buffer (current-buffer))
+                  (goto-char (point-max))
+                  (bibtex-beginning-of-entry))))))))))
+
+(defun myfunc--find-entry-by-doi (doi bib-file)
+  "Search for BibTeX entry with DOI in BIB-FILE.
+Returns the position of the entry if found, nil otherwise."
+  (when (and doi (not (string-empty-p doi)))
+    (with-current-buffer (find-file-noselect bib-file)
+      (save-excursion
+        (goto-char (point-min))
+        (let ((search-doi (replace-regexp-in-string "[{}]" "" doi))
+              (found-pos nil))
+          (while (and (not found-pos)
+                      (re-search-forward "^[ \t]*doi[ \t]*=[ \t]*[{\"]*\\([^,}\"]+\\)" nil t))
+            (let ((current-doi (replace-regexp-in-string "[{}\" ]" "" (match-string 1))))
+              (when (string= (downcase search-doi) (downcase current-doi))
+                (setq found-pos (save-excursion
+                                  (bibtex-beginning-of-entry)
+                                  (point))))))
+          found-pos)))))
+
+
+(defun myfunc--get-pdf-file ()
+  "Get PDF file from context (dired or pdf-tools) or prompt user.
+Returns the PDF file path."
+  (cond
+   ;; pdf-toolsで閲覧中
+   ((and (eq major-mode 'pdf-view-mode)
+         (boundp 'buffer-file-name)
+         buffer-file-name)
+    buffer-file-name)
+   
+   ;; diredバッファでPDFファイルにカーソルがある
+   ((and (eq major-mode 'dired-mode)
+         (dired-get-filename nil t)
+         (string-match-p "\\.pdf\\'" (dired-get-filename nil t)))
+    (dired-get-filename nil t))
+   
+   ;; それ以外: ユーザーに入力を求める
+   (t
+    (read-file-name "PDF file: " nil nil t nil
+                    (lambda (name) (string-match-p "\\.pdf\\'" name))))))
+
+
+;; myfunc-add-pdf-to-bib にもうひとつ機能を追加してほしい。
+;; PDF-FILEから抽出したdoiをもつbibエントリがBIB-FILEに含まれていないか確認し、
+;; あった場合は「そのエントリはすでにある」という意味のメッセージを出すとともに、
+;; 該当するエントリの先頭行に移動してほしい
+
+
+```elisp
+```
+
+
 (provide 'myfunc)
 ;;; myfunc.el ends here
