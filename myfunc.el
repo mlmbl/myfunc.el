@@ -143,60 +143,6 @@ If nil, prompts for a file each time."
                  (file :tag "Default .bib file"))
   :group 'myfunc)
 
-;; (defun myfunc-add-pdf-to-bib (pdf-file bib-file)
-;;   "Add BibTeX entry from PDF-FILE to BIB-FILE with custom key.
-;; PDF-FILE is determined by context (dired, pdf-tools, or prompt).
-;; BIB-FILE defaults to `myfunc-default-bib-file' or prompts if nil."
-;;   (interactive
-;;    (list (myfunc--get-pdf-file)
-;;          (or myfunc-default-bib-file
-;; 	     (car org-cite-global-bibliography)
-;;              (read-file-name "BibTeX file: " nil nil t nil
-;;                              (lambda (name) (string-match-p "\\.bib\\'" name))))))
-;;   (let ((pdf-path (expand-file-name pdf-file))
-;;         (bib-path (expand-file-name bib-file)))
-;;     ;; 一時バッファでBibTeX生成を試みる
-;;     (with-temp-buffer
-;;       (let ((output (string-trim
-;;                      (shell-command-to-string
-;;                       (format "pdf2bib %s | tail -n +2" 
-;;                               (shell-quote-argument pdf-path))))))
-;;         (if (or (string-empty-p output)
-;;                 (string-match-p "error\\|warning\\|failed" (downcase output)))
-;;             (progn
-;;               (message "No bib-info found for: %s" (file-name-nondirectory pdf-path))
-;;               nil) ; 解析失敗で終了
-;;           ;; 解析成功: BibTeXエントリを挿入
-;;           (insert output)
-;;           (bibtex-mode)
-;;           (bibtex-clean-entry)
-          
-;;           ;; キーを再生成
-;;           (goto-char (point-min))
-;;           (bibtex-beginning-of-entry)
-;;           (let* ((old-key (bibtex-key-in-head))
-;;                  (new-key (myfunc-generate-bibtex-key)))
-;;             (when old-key
-;;               (search-forward (concat "{" old-key))
-;;               (replace-match (concat "{" new-key)))
-            
-;;             ;; bibファイルの末尾に追加
-;;             (let ((entry-text (buffer-string)))
-;;               (find-file bib-path)
-;;               (goto-char (point-max))
-;;               ;; 末尾に改行がなければ追加
-;;               (unless (bolp) (insert "\n"))
-;;               (insert "\n" entry-text "\n")
-;;               (bibtex-mode)
-;;               (save-buffer)
-;;               (message "Added entry with key '%s' to %s" 
-;;                        new-key 
-;;                        (file-name-nondirectory bib-path))
-;;               ;; bibファイルを表示
-;;               (switch-to-buffer (current-buffer))
-;;               (goto-char (point-max))
-;;               (bibtex-beginning-of-entry))))))))
-
 (defun myfunc-add-pdf-to-bib (pdf-file bib-file)
   "Add BibTeX entry from PDF-FILE to BIB-FILE with custom key.
 PDF-FILE is determined by context (dired, pdf-tools, or prompt).
@@ -308,16 +254,6 @@ Returns the PDF file path."
    (t
     (read-file-name "PDF file: " nil nil t nil
                     (lambda (name) (string-match-p "\\.pdf\\'" name))))))
-
-
-;; myfunc-add-pdf-to-bib にもうひとつ機能を追加してほしい。
-;; PDF-FILEから抽出したdoiをもつbibエントリがBIB-FILEに含まれていないか確認し、
-;; あった場合は「そのエントリはすでにある」という意味のメッセージを出すとともに、
-;; 該当するエントリの先頭行に移動してほしい
-
-
-```elisp
-```
 
 
 (provide 'myfunc)
